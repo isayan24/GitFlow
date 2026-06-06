@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: gitflow-db
+    restart: always
+    environment:
+      POSTGRES_USER: gitflow_user
+      POSTGRES_PASSWORD: gitflow_password
+      POSTGRES_DB: gitflow_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+    driver: local

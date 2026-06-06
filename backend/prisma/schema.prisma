@@ -1,0 +1,106 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskType {
+  GITHUB_ISSUE
+  GITHUB_PR
+  MANUAL
+}
+
+model User {
+  id             String       @id @default(uuid())
+  clerkId        String       @unique
+  githubUsername String?      @unique
+  email          String?
+  name           String?
+  avatarUrl      String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  repositories   Repository[]
+  assignedTasks  Task[]       @relation("AssignedTasks")
+  createdTasks   Task[]       @relation("CreatedTasks")
+}
+
+model Repository {
+  id             String                 @id @default(uuid())
+  githubRepoId   Int                    @unique
+  name           String
+  owner          String
+  description    String?
+  url            String
+  isPrivate      Boolean                @default(false)
+  imageUrl       String?                // Custom project banner/icon URL
+  importedById   String
+  importedBy     User                   @relation(fields: [importedById], references: [id], onDelete: Cascade)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  tasks          Task[]
+  assignments    Assignment[]
+  commitActivity WeeklyCommitActivity[]
+
+  @@index([importedById])
+}
+
+model Assignment {
+  id           String     @id @default(uuid())
+  title        String
+  description  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  tasks        Task[]
+
+  @@index([repositoryId])
+}
+
+model Task {
+  id           String      @id @default(uuid())
+  title        String
+  description  String?
+  status       TaskStatus  @default(TODO)
+  type         TaskType    @default(MANUAL)
+  githubNumber Int?        // GitHub Issue/PR number (if synced)
+  githubUrl    String?     // Link to GitHub page (if synced)
+  images       String[]    @default([]) // Task uploaded screenshot/image URLs
+  repositoryId String
+  repository   Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  assignmentId String?
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  assigneeId   String?
+  assignee     User?       @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creatorId    String?
+  creator      User?       @relation("CreatedTasks", fields: [creatorId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([repositoryId])
+  @@index([assignmentId])
+  @@index([assigneeId])
+}
+
+model WeeklyCommitActivity {
+  id           String     @id @default(uuid())
+  week         Int        // Unix timestamp for the start of the week
+  days         Int[]      // Array of 7 integers representing daily commit counts
+  total        Int        // Total commits for the week
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([repositoryId, week])
+  @@index([repositoryId])
+}
