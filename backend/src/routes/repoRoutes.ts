@@ -5,7 +5,8 @@ import {
   listImportedRepos, 
   getRepositoryDetails, 
   updateTaskStatus, 
-  createTask 
+  createTask,
+  syncRepository
 } from '../controllers/repoController.js';
 
 const router = Router();
@@ -18,6 +19,9 @@ router.get('/', requireAuth, requireDbUser, listImportedRepos);
 
 // GET /api/repositories/:id (Details: tasks, commits, assignments)
 router.get('/:id', requireAuth, requireDbUser, getRepositoryDetails);
+
+// POST /api/repositories/:id/sync
+router.post('/:id/sync', requireAuth, requireDbUser, syncRepository);
 
 // PATCH /api/repositories/tasks/:taskId (Update status)
 router.patch('/tasks/:taskId', requireAuth, requireDbUser, updateTaskStatus);

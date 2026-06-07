@@ -116,4 +116,24 @@ export const githubService = {
     console.warn(`❌ Failed to retrieve calculated commit activity statistics for ${owner}/${repo} after ${maxRetries} retries.`);
     return [];
   },
+
+  /**
+   * Fetches metadata for a specific repository to verify existence and access
+   */
+  async fetchRepoMetadata(
+    token: string,
+    owner: string,
+    repo: string
+  ): Promise<GitHubRepoResponse> {
+    const response = await axios.get<GitHubRepoResponse>(
+      `${GITHUB_API_URL}/repos/${owner}/${repo}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+        },
+      }
+    );
+    return response.data;
+  },
 };

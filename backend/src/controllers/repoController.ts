@@ -331,3 +331,210 @@ export const createTask = async (
     next(error);
   }
 };
+
+/**
+ * Synchronizes a repository with GitHub: fetches latest issues, PRs, and commit activity.
+ * If the repository is deleted or inaccessible on GitHub (404), deletes it locally and returns status DELETED.
+ */
+export const syncRepository = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const dbUserId = req.auth?.dbUser?.id;
+    const clerkId = req.auth?.userId;
+
+    // 1. Fetch repository from DB
+    const repository = await prisma.repository.findFirst({
+      where: {
+        id,
+        importedById: dbUserId,
+      },
+    });
+
+    if (!repository) {
+      return res.status(404).json({
+        status: "NOT_FOUND",
+        message: "Repository not found or access denied.",
+      });
+    }
+
+    // 2. Fetch GitHub Token from Clerk connection
+    const tokenResponse = await clerkClient.users.getUserOauthAccessToken(
+      clerkId!,
+      "github",
+    );
+    const githubToken = tokenResponse.data[0]?.token;
+
+    if (!githubToken) {
+      return res.status(400).json({
+        status: "ERROR",
+        message:
+          "GitHub OAuth token not found. Please log in with GitHub to perform syncs.",
+      });
+    }
+
+    // 3. Verify repository exists on GitHub
+    try {
+      await githubService.fetchRepoMetadata(
+        githubToken,
+        repository.owner,
+        repository.name,
+      );
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        console.warn(
+          `⚠️ Repository ${repository.owner}/${repository.name} not found on GitHub. Auto-deleting from local DB.`,
+        );
+        // Cascade delete will clean up tasks and activities automatically
+        await prisma.repository.delete({
+          where: { id: repository.id },
+        });
+
+        return res.status(200).json({
+          status: "DELETED",
+          message:
+            "Repository has been deleted or is no longer accessible on GitHub.",
+        });
+      }
+      throw error;
+    }
+
+    // 4. Sync issues/PRs
+    try {
+      console.log(
+        `🔄 Syncing issues/PRs from GitHub for ${repository.owner}/${repository.name}...`,
+      );
+      const githubIssues = await githubService.fetchRepoIssues(
+        githubToken,
+        repository.owner,
+        repository.name,
+      );
+
+      const existingTasks = await prisma.task.findMany({
+        where: {
+          repositoryId: repository.id,
+          githubNumber: { not: null },
+        },
+      });
+
+      const taskMap = new Map(existingTasks.map((t) => [t.githubNumber, t]));
+
+      for (const issue of githubIssues) {
+        const existingTask = taskMap.get(issue.number);
+
+        if (existingTask) {
+          // Update existing task
+          const newStatus =
+            issue.state === "closed"
+              ? TaskStatus.COMPLETED
+              : existingTask.status === TaskStatus.COMPLETED
+                ? TaskStatus.TODO
+                : existingTask.status;
+
+          await prisma.task.update({
+            where: { id: existingTask.id },
+            data: {
+              title: issue.title,
+              description: issue.body,
+              status: newStatus,
+              type: issue.pull_request
+                ? TaskType.GITHUB_PR
+                : TaskType.GITHUB_ISSUE,
+              githubUrl: issue.html_url,
+            },
+          });
+        } else {
+          // Create new task
+          await prisma.task.create({
+            data: {
+              title: issue.title,
+              description: issue.body,
+              status:
+                issue.state === "closed"
+                  ? TaskStatus.COMPLETED
+                  : TaskStatus.TODO,
+              type: issue.pull_request
+                ? TaskType.GITHUB_PR
+                : TaskType.GITHUB_ISSUE,
+              githubNumber: issue.number,
+              githubUrl: issue.html_url,
+              repositoryId: repository.id,
+            },
+          });
+        }
+      }
+      console.log(`✅ Synced ${githubIssues.length} issues/PRs.`);
+    } catch (err) {
+      console.error("⚠️ Failed to sync GitHub issues:", err);
+    }
+
+    // 5. Sync commit activity
+    try {
+      console.log(
+        `🔄 Syncing commit activity from GitHub for ${repository.owner}/${repository.name}...`,
+      );
+      const githubCommits = await githubService.fetchRepoCommitActivity(
+        githubToken,
+        repository.owner,
+        repository.name,
+      );
+
+      for (const item of githubCommits) {
+        await prisma.weeklyCommitActivity.upsert({
+          where: {
+            repositoryId_week: {
+              repositoryId: repository.id,
+              week: item.week,
+            },
+          },
+          update: {
+            days: item.days,
+            total: item.total,
+          },
+          create: {
+            week: item.week,
+            days: item.days,
+            total: item.total,
+            repositoryId: repository.id,
+          },
+        });
+      }
+      console.log(`✅ Synced commit activity.`);
+    } catch (err) {
+      console.error("⚠️ Failed to sync GitHub commit activity:", err);
+    }
+
+    // Return the updated repository details
+    const updatedRepository = await prisma.repository.findUnique({
+      where: { id: repository.id },
+      include: {
+        tasks: {
+          orderBy: { createdAt: "desc" },
+        },
+        assignments: {
+          include: {
+            tasks: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
+        commitActivity: {
+          orderBy: { week: "asc" },
+        },
+      },
+    });
+
+    console.log(updatedRepository, "updatedRepository");
+
+    return res.status(200).json({
+      status: "SUCCESS",
+      message: "Repository sync completed successfully.",
+      repository: updatedRepository,
+    });
+  } catch (error) {
+    console.error("Error syncing repository:", error);
+    next(error);
+  }
+};
