@@ -85,22 +85,35 @@ export const githubService = {
     owner: string,
     repo: string
   ): Promise<GitHubCommitActivityResponse[]> {
-    const response = await axios.get<GitHubCommitActivityResponse[]>(
-      `${GITHUB_API_URL}/repos/${owner}/${repo}/stats/commit_activity`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
-        },
+    const maxRetries = 5;
+    const delayMs = 2000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`🐙 Fetching commit activity for ${owner}/${repo} (attempt ${attempt}/${maxRetries})...`);
+      const response = await axios.get<GitHubCommitActivityResponse[]>(
+        `${GITHUB_API_URL}/repos/${owner}/${repo}/stats/commit_activity`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+          },
+        }
+      );
+
+      if (response.status === 200) {
+        // Statistics are ready, return them
+        return response.data || [];
       }
-    );
-    
-    // GitHub API can return 202 if the stats are being computed.
-    if (response.status === 202) {
-      console.warn(`⚠️ GitHub statistics for ${owner}/${repo} are currently calculating (status 202).`);
-      return [];
+
+      if (response.status === 202) {
+        console.warn(`⚠️ GitHub statistics for ${owner}/${repo} are currently calculating (status 202). Waiting ${delayMs}ms before retry...`);
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
     }
 
-    return response.data || [];
+    console.warn(`❌ Failed to retrieve calculated commit activity statistics for ${owner}/${repo} after ${maxRetries} retries.`);
+    return [];
   },
 };

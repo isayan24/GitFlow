@@ -25,6 +25,9 @@ export const listImportedRepos = async (
             assignments: true,
           },
         },
+        commitActivity: {
+          orderBy: { week: "asc" },
+        },
       },
       orderBy: { updatedAt: "desc" },
     });
@@ -172,6 +175,159 @@ export const importRepository = async (
     });
   } catch (error) {
     console.error("Error importing repository:", error);
+    next(error);
+  }
+};
+
+/**
+ * Fetches full details for a specific repository (including tasks, assignments, and commit activity)
+ */
+export const getRepositoryDetails = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const dbUserId = req.auth?.dbUser?.id;
+
+    const repository = await prisma.repository.findFirst({
+      where: {
+        id,
+        importedById: dbUserId,
+      },
+      include: {
+        tasks: {
+          orderBy: { createdAt: "desc" },
+        },
+        assignments: {
+          include: {
+            tasks: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
+        commitActivity: {
+          orderBy: { week: "asc" },
+        },
+      },
+    });
+
+    if (!repository) {
+      return res.status(404).json({
+        status: "NOT_FOUND",
+        message: "Repository not found or access denied.",
+      });
+    }
+
+    return res.status(200).json({
+      status: "SUCCESS",
+      repository,
+    });
+  } catch (error) {
+    console.error("Error getting repository details:", error);
+    next(error);
+  }
+};
+
+/**
+ * Updates the status of a specific task
+ */
+export const updateTaskStatus = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { taskId } = req.params;
+    const { status } = req.body;
+    const dbUserId = req.auth?.dbUser?.id;
+
+    if (!status || !Object.values(TaskStatus).includes(status)) {
+      return res.status(400).json({
+        status: "BAD_REQUEST",
+        message: `Invalid or missing status. Must be one of: ${Object.values(TaskStatus).join(", ")}`,
+      });
+    }
+
+    // Verify task ownership through repository import association
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { repository: true },
+    });
+
+    if (!task || task.repository.importedById !== dbUserId) {
+      return res.status(404).json({
+        status: "NOT_FOUND",
+        message: "Task not found or access denied.",
+      });
+    }
+
+    const updatedTask = await prisma.task.update({
+      where: { id: taskId },
+      data: { status: status as TaskStatus },
+    });
+
+    return res.status(200).json({
+      status: "SUCCESS",
+      task: updatedTask,
+    });
+  } catch (error) {
+    console.error("Error updating task status:", error);
+    next(error);
+  }
+};
+
+/**
+ * Creates a manual task inside a repository
+ */
+export const createTask = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params; // Repository internal ID
+    const { title, description, status } = req.body;
+    const dbUserId = req.auth?.dbUser?.id;
+
+    if (!title) {
+      return res.status(400).json({
+        status: "BAD_REQUEST",
+        message: "Task title is required.",
+      });
+    }
+
+    // Verify repository ownership
+    const repo = await prisma.repository.findFirst({
+      where: {
+        id,
+        importedById: dbUserId,
+      },
+    });
+
+    if (!repo) {
+      return res.status(404).json({
+        status: "NOT_FOUND",
+        message: "Repository not found or access denied.",
+      });
+    }
+
+    const task = await prisma.task.create({
+      data: {
+        title,
+        description,
+        status: (status as TaskStatus) || TaskStatus.TODO,
+        type: TaskType.MANUAL,
+        repositoryId: id,
+      },
+    });
+
+    return res.status(201).json({
+      status: "SUCCESS",
+      task,
+    });
+  } catch (error) {
+    console.error("Error creating manual task:", error);
     next(error);
   }
 };
