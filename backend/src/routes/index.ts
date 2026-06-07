@@ -1,11 +1,13 @@
 import { Router } from 'express';
 
+import authRouter from './authRoutes.js';
+import githubRouter from './githubRoutes.js';
+import repoRouter from './repoRoutes.js';
+
 const router = Router();
 
-// Placeholder: sub-routers will be mounted here
-// router.use('/auth', authRouter);
-// router.use('/repositories', repoRouter);
-// router.use('/tasks', taskRouter);
-// router.use('/assignments', assignmentRouter);
+router.use('/auth', authRouter);
+router.use('/github', githubRouter);
+router.use('/repositories', repoRouter);
 
 export default router;

@@ -11,23 +11,22 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3000/",
+  "http://localhost:3001/",
+];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
-// Mount Clerk middleware globally only if configured
-const isClerkConfigured =
-  process.env.CLERK_PUBLISHABLE_KEY &&
-  process.env.CLERK_PUBLISHABLE_KEY !== "pk_test_placeholder_key" &&
-  process.env.CLERK_SECRET_KEY &&
-  process.env.CLERK_SECRET_KEY !== "sk_test_placeholder_key";
-
-if (isClerkConfigured) {
-  app.use(clerkMiddleware());
-} else {
-  console.warn(
-    "⚠️ Clerk keys are not configured. clerkMiddleware is bypassed for public routes.",
-  );
-}
+// Mount Clerk middleware globally
+app.use(clerkMiddleware());
 
 // API Routes
 app.use("/api", apiRouter);

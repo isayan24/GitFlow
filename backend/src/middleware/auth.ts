@@ -6,91 +6,24 @@ import { prisma } from "../config/db.js";
 export interface AuthenticatedRequest extends Request {
   auth?: {
     userId: string;
-    dbUser?: any;
+    dbUser?: any; // Mapped DB user object
   };
 }
 
-// Helper to check if Clerk is configured with real keys
-const isClerkConfigured = (): boolean => {
-  const pubKey = process.env.CLERK_PUBLISHABLE_KEY;
-  const secKey = process.env.CLERK_SECRET_KEY;
-  return (
-    !!pubKey &&
-    pubKey !== "pk_test_placeholder_key" &&
-    !!secKey &&
-    secKey !== "sk_test_placeholder_key"
-  );
-};
+// Built-in Clerk middleware that rejects unauthenticated requests
+export const requireAuth = clerkRequireAuth();
 
-// Route-level middleware that verifies the Clerk session
-export const requireAuth = (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  if (!isClerkConfigured()) {
-    // In development mode, mock a user if Clerk keys are not set
-    if (process.env.NODE_ENV !== "production") {
-      req.auth = {
-        userId: "user_clerk_dev_mock",
-      };
-      return next();
-    }
-    return res.status(500).json({
-      status: "ERROR",
-      message: "Clerk authentication is not configured on this server.",
-    });
-  }
-
-  // Otherwise, use Clerk's official Express middleware
-  return clerkRequireAuth()(req, res, next);
-};
-
-// Middleware that ensures the authenticated Clerk user exists in our local PostgreSQL database
+/**
+ * Middleware that ensures the authenticated Clerk user exists in our local PostgreSQL database
+ */
 export const requireDbUser = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    let userId: string;
-
-    if (!isClerkConfigured()) {
-      if (process.env.NODE_ENV !== "production") {
-        userId = "user_clerk_dev_mock";
-
-        // Auto-create/upsert mock user in local DB to prevent foreign key issues during testing
-        let mockUser = await prisma.user.findUnique({
-          where: { clerkId: userId },
-        });
-
-        if (!mockUser) {
-          mockUser = await prisma.user.create({
-            data: {
-              clerkId: userId,
-              githubUsername: "gitflow_mock_developer",
-              email: "developer@gitflow.local",
-              name: "Mock Developer",
-              avatarUrl:
-                "https://avatars.githubusercontent.com/u/131574568?v=4",
-            },
-          });
-        }
-
-        req.auth = {
-          userId,
-          dbUser: mockUser,
-        };
-        return next();
-      }
-      return res.status(500).json({
-        status: "ERROR",
-        message: "Clerk authentication is not configured on this server.",
-      });
-    }
-
-    // Clerk is configured, extract real auth state
     const authState = getAuth(req);
+
     if (!authState.userId) {
       return res.status(401).json({
         status: "UNAUTHORIZED",
@@ -98,7 +31,7 @@ export const requireDbUser = async (
       });
     }
 
-    userId = authState.userId;
+    const userId = authState.userId;
 
     // Find user in database
     const dbUser = await prisma.user.findUnique({
@@ -113,6 +46,7 @@ export const requireDbUser = async (
       });
     }
 
+    // Attach to request
     req.auth = {
       userId,
       dbUser,
