@@ -13,10 +13,10 @@ import {
   SidebarMenuButton,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Folder, AlertCircle, Plus, GitBranch } from "lucide-react"
+import { LayoutDashboard, Folder, Plus, GitBranch } from "lucide-react"
 
 import { useImportedProjects } from "@/features/projects/api/useImportedProjects"
-import { useDashboardStore } from "@/store/useDashboardStore"
+import { useAppStore } from "@/store/useAppStore"
 
 export interface SidebarLeftProps extends React.ComponentProps<typeof Sidebar> {}
 
@@ -27,8 +27,9 @@ export function SidebarLeft({
   const currentPath = location.pathname
 
   const { data: importedRepos = [] } = useImportedProjects()
-  const selectedRepoId = useDashboardStore((state) => state.selectedRepoId)
-  const setSelectedRepoId = useDashboardStore((state) => state.setSelectedRepoId)
+  const selectedRepoId = useAppStore((state) => state.selectedRepoId)
+  const setSelectedRepoId = useAppStore((state) => state.setSelectedRepoId)
+  const setShowDiscoveryModal = useAppStore((state) => state.setShowDiscoveryModal)
 
 
   return (
@@ -46,17 +47,13 @@ export function SidebarLeft({
 
         {/* Add Repository Action Button */}
         <div className="px-3 pt-1">
-          <Link
-            to="/dashboard/discovery"
-            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
-              currentPath === '/dashboard/discovery'
-                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/10'
-                : 'bg-sidebar-accent border border-sidebar-border hover:border-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent/80'
-            }`}
+          <button
+            onClick={() => setShowDiscoveryModal(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-sidebar-accent border border-sidebar-border hover:border-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent/80 transition duration-200 cursor-pointer"
           >
             <Plus size={14} />
             <span>Add Repository</span>
-          </Link>
+          </button>
         </div>
       </SidebarHeader>
 
@@ -92,16 +89,6 @@ export function SidebarLeft({
               </SidebarMenuButton>
             </SidebarMenuItem>
 
-            <SidebarMenuItem>
-              <SidebarMenuButton 
-                isActive={currentPath === '/dashboard/issues'} 
-                render={<Link to="/dashboard/issues" />}
-                className="w-full text-sidebar-foreground/75 hover:text-sidebar-foreground"
-              >
-                <AlertCircle size={16} />
-                <span>Issues</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
           </SidebarMenu>
         </div>
 
@@ -144,7 +131,7 @@ export function SidebarLeft({
                         <span className="truncate">{repo.name}</span>
                       </div>
                       <span className="text-3xs bg-sidebar-accent text-sidebar-foreground/60 border border-sidebar-border px-1.5 py-0.5 rounded-full shrink-0">
-                        {repo._count?.tasks || 0}
+                        {repo._count?.issues || 0}
                       </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

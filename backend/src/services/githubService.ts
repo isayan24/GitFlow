@@ -13,6 +13,7 @@ export interface GitHubRepoResponse {
     login: string;
     avatar_url: string;
   };
+  language?: string | null;
 }
 
 export interface GitHubIssueResponse {
@@ -37,19 +38,64 @@ export interface GitHubCommitActivityResponse {
  */
 export const githubService = {
   /**
-   * Fetches the repositories belonging to the authenticated GitHub user
+   * Fetches the repositories belonging to the authenticated GitHub user, optionally filtered by search query
    */
-  async fetchUserRepos(token: string): Promise<GitHubRepoResponse[]> {
+  async fetchUserRepos(
+    token: string,
+    page: number = 1,
+    perPage: number = 20,
+    search?: string,
+  ): Promise<GitHubRepoResponse[]> {
+    const config = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+    };
+
+    if (search?.trim()) {
+      try {
+        const userRes = await axios.get<{ login: string }>(`${GITHUB_API_URL}/user`, config);
+        const username = userRes.data.login;
+
+        const orgsRes = await axios.get<Array<{ login: string }>>(`${GITHUB_API_URL}/user/orgs`, config);
+        const scopes = [username, ...orgsRes.data.map((o) => o.login)];
+
+        const results = await Promise.all(
+          scopes.map(async (scope) => {
+            try {
+              const res = await axios.get<{ items: GitHubRepoResponse[] }>(
+                `${GITHUB_API_URL}/search/repositories`,
+                {
+                  ...config,
+                  params: {
+                    q: `${search.trim()} user:${scope}`,
+                    page,
+                    per_page: perPage,
+                  },
+                },
+              );
+              return res.data.items || [];
+            } catch (err) {
+              console.error(`⚠️ Failed to search repos in scope ${scope}:`, err);
+              return [];
+            }
+          }),
+        );
+        return results.flat();
+      } catch (err) {
+        console.error("⚠️ Failed searching GitHub repos, falling back to all repos list:", err);
+      }
+    }
+
     const response = await axios.get<GitHubRepoResponse[]>(
       `${GITHUB_API_URL}/user/repos`,
       {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-        },
+        ...config,
         params: {
           sort: "updated",
-          per_page: 100,
+          page,
+          per_page: perPage,
         },
       },
     );
@@ -187,5 +233,103 @@ export const githubService = {
       },
     );
     return response.data;
+  },
+
+  /**
+   * Detects the tech stack of a repository by inspecting its root files and package.json if present
+   */
+  async detectTechStack(
+    token: string,
+    owner: string,
+    repo: string,
+  ): Promise<string | null> {
+    try {
+      // 1. Fetch root contents
+      const response = await axios.get<Array<{ name: string; type: string }>>(
+        `${GITHUB_API_URL}/repos/${owner}/${repo}/contents`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+          },
+        },
+      );
+      const files = response.data || [];
+      const fileNames = files.map((f) => f.name);
+
+      // Check for Go
+      if (fileNames.includes("go.mod")) {
+        return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original.svg";
+      }
+      // Check for Rust
+      if (fileNames.includes("Cargo.toml")) {
+        return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/rust/rust-original.svg";
+      }
+      // Check for Python
+      if (
+        fileNames.includes("requirements.txt") ||
+        fileNames.includes("pyproject.toml") ||
+        fileNames.includes("Pipfile")
+      ) {
+        return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg";
+      }
+
+      // Check for Node/JS/TS (including monorepo paths)
+      const pathsToCheck = [
+        "package.json",
+        "client/package.json",
+        "frontend/package.json",
+        "apps/client/package.json",
+        "apps/frontend/package.json"
+      ];
+
+      for (const p of pathsToCheck) {
+        const topDir = p.split("/")[0];
+        if (topDir !== "package.json" && !fileNames.includes(topDir)) {
+          continue;
+        }
+
+        try {
+          const pkgResponse = await axios.get<{ content: string }>(
+            `${GITHUB_API_URL}/repos/${owner}/${repo}/contents/${p}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github+json",
+              },
+            },
+          );
+          if (pkgResponse.data?.content) {
+            const decoded = Buffer.from(
+              pkgResponse.data.content,
+              "base64",
+            ).toString("utf-8");
+            const pkg = JSON.parse(decoded);
+            const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+
+            if (deps.next) {
+              return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nextjs/nextjs-original.svg";
+            }
+            if (deps.react) {
+              return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg";
+            }
+            if (deps.typescript) {
+              return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg";
+            }
+            return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg";
+          }
+        } catch (e) {
+          // Expected 404s for non-existing files
+        }
+      }
+
+      // Pure HTML/CSS/JS fallback
+      if (fileNames.includes("index.html")) {
+        return "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/html5/html5-original.svg";
+      }
+    } catch (err) {
+      console.error("⚠️ Failed to detect tech stack:", err);
+    }
+    return null;
   },
 };

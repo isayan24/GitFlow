@@ -90,15 +90,15 @@ export function ProjectList({
                 {/* Stats Counter */}
                 <div className="flex items-center gap-4 text-3xs text-muted-foreground/85">
                   <span>
-                    Tasks:{" "}
+                    Issues:{" "}
                     <strong className="text-foreground">
-                      {repo._count.tasks}
+                      {repo._count.issues}
                     </strong>
                   </span>
                   <span>
-                    Assignments:{" "}
+                    Checklists:{" "}
                     <strong className="text-foreground">
-                      {repo._count.assignments}
+                      {repo._count.checklists}
                     </strong>
                   </span>
                 </div>

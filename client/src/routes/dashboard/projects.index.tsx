@@ -1,14 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ProjectList } from "../../features/projects/components/ProjectList";
-import { useDashboardStore } from "@/store/useDashboardStore";
+import { useAppStore } from "@/store/useAppStore";
 
 export const Route = createFileRoute("/dashboard/projects/")({
   component: ProjectsRoute,
 });
 
 function ProjectsRoute() {
-  const setSelectedRepoId = useDashboardStore(
+  const setSelectedRepoId = useAppStore(
     (state) => state.setSelectedRepoId,
+  );
+  const setShowDiscoveryModal = useAppStore(
+    (state) => state.setShowDiscoveryModal,
   );
   const navigate = useNavigate();
 
@@ -22,7 +25,7 @@ function ProjectsRoute() {
         });
       }}
       onImportClick={() => {
-        navigate({ to: "/dashboard/discovery" });
+        setShowDiscoveryModal(true);
       }}
     />
   );

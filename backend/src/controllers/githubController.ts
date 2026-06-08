@@ -37,8 +37,17 @@ export const listUserRepos = async (
       });
     }
 
+    const page = parseInt(req.query.page as string) || 1;
+    const perPage = parseInt(req.query.per_page as string) || 20;
+    const search = (req.query.search as string) || "";
+
     // Query GitHub API
-    const repos = await githubService.fetchUserRepos(githubToken);
+    const repos = await githubService.fetchUserRepos(
+      githubToken,
+      page,
+      perPage,
+      search,
+    );
 
     const mappedRepos = repos.map((repo) => ({
       id: repo.id,
@@ -49,6 +58,7 @@ export const listUserRepos = async (
       isPrivate: repo.private,
       owner: repo.owner.login,
       ownerAvatarUrl: repo.owner.avatar_url,
+      language: repo.language,
     }));
 
     return res.status(200).json({

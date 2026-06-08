@@ -2,22 +2,22 @@ import { useAuth } from '@clerk/tanstack-react-start'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 
-interface UpdateTaskParams {
-  taskId: string;
-  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
+interface UpdateIssueStatusParams {
+  issueId: string;
+  status: 'OPEN' | 'CLOSED';
   repoId: string;
 }
 
-export function useUpdateTaskStatus() {
+export function useUpdateIssueStatus() {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   return useMutation({
-    mutationFn: async ({ taskId, status }: UpdateTaskParams) => {
+    mutationFn: async ({ issueId, status }: UpdateIssueStatusParams) => {
       const token = await getToken();
       const response = await axios.patch(
-        `${API_URL}/api/repositories/tasks/${taskId}`,
+        `${API_URL}/api/repositories/issues/${issueId}/status`,
         { status },
         {
           headers: {
@@ -25,9 +25,9 @@ export function useUpdateTaskStatus() {
           },
         }
       );
-      return response.data.task;
+      return response.data.issue;
     },
-    onMutate: async ({ taskId, status, repoId }) => {
+    onMutate: async ({ issueId, status, repoId }) => {
       await queryClient.cancelQueries({ queryKey: ['project-details', repoId] });
       const previousDetails = queryClient.getQueryData(['project-details', repoId]);
 
@@ -35,8 +35,8 @@ export function useUpdateTaskStatus() {
         if (!old) return old;
         return {
           ...old,
-          tasks: old.tasks.map((t: any) =>
-            t.id === taskId ? { ...t, status } : t
+          issues: old.issues.map((i: any) =>
+            i.id === issueId ? { ...i, status } : i
           ),
         };
       });
@@ -53,6 +53,7 @@ export function useUpdateTaskStatus() {
     },
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['project-details', variables.repoId] });
+      queryClient.invalidateQueries({ queryKey: ['imported-projects'] });
     },
   });
 }

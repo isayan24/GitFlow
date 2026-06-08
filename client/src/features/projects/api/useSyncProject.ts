@@ -21,7 +21,7 @@ export function useSyncProject() {
       );
       return response.data;
     },
-    onSuccess: (data, repoId) => {
+    onSuccess: (_data, repoId) => {
       queryClient.invalidateQueries({ queryKey: ["imported-projects"] });
       queryClient.invalidateQueries({ queryKey: ["project-details", repoId] });
     },

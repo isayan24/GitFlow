@@ -33,14 +33,14 @@ const data = {
   ],
 }
 
-import { useDashboardStore } from "@/store/useDashboardStore"
+import { useAppStore } from "@/store/useAppStore"
 
 interface SidebarRightProps extends React.ComponentProps<typeof Sidebar> {}
 
 export function SidebarRight({
   ...props
 }: SidebarRightProps) {
-  const setShowRightSidebar = useDashboardStore((state) => state.setShowRightSidebar)
+  const setShowRightSidebar = useAppStore((state) => state.setShowRightSidebar)
 
   return (
     <Sidebar

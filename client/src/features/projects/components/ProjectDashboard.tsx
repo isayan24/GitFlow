@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Folder, AlertCircle, Loader2, ArrowRight, Plus, RefreshCw } from 'lucide-react'
 import { CommitHeatmap } from './CommitHeatmap'
-import { KanbanBoard } from '../../tasks/components/KanbanBoard'
+import { IssuesBoard } from '../../tasks/components/IssuesBoard'
 import { useSyncProject } from '../api/useSyncProject'
 
 interface ProjectDashboardProps {
@@ -10,7 +10,7 @@ interface ProjectDashboardProps {
   activeRepoDetails: any
   loadingDetails: boolean
   detailsError: any
-  onAddTaskClick: () => void
+  onAddIssueClick: () => void
   onImportClick: () => void
 }
 
@@ -19,7 +19,7 @@ export function ProjectDashboard({
   activeRepoDetails,
   loadingDetails,
   detailsError,
-  onAddTaskClick,
+  onAddIssueClick,
   onImportClick,
 }: ProjectDashboardProps) {
   const navigate = useNavigate();
@@ -145,11 +145,11 @@ export function ProjectDashboard({
       {/* Commit Calendar Heatmap */}
       <CommitHeatmap commitActivity={activeRepoDetails.commitActivity} />
 
-      {/* Kanban Board */}
-      <KanbanBoard 
+      {/* Issues Board */}
+      <IssuesBoard 
         repoId={activeRepoDetails.id} 
-        tasks={activeRepoDetails.tasks} 
-        onAddTaskClick={onAddTaskClick} 
+        issues={activeRepoDetails.issues || []} 
+        onAddIssueClick={onAddIssueClick} 
       />
     </div>
   );

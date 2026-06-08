@@ -1,13 +1,12 @@
 import {
   createFileRoute,
   useParams,
-  useNavigate,
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useProjectDetails } from "../../features/projects/api/useProjectDetails";
 import { ProjectDashboard } from "../../features/projects/components/ProjectDashboard";
-import { AddTaskModal } from "../../features/tasks/components/AddTaskModal";
-import { useDashboardStore } from "@/store/useDashboardStore";
+import { AddIssueModal } from "../../features/tasks/components/AddIssueModal";
+import { useAppStore } from "@/store/useAppStore";
 
 export const Route = createFileRoute("/dashboard/projects/$projectId")({
   component: ProjectDetailsRoute,
@@ -15,12 +14,14 @@ export const Route = createFileRoute("/dashboard/projects/$projectId")({
 
 function ProjectDetailsRoute() {
   const { projectId } = useParams({ from: "/dashboard/projects/$projectId" });
-  const setSelectedRepoId = useDashboardStore(
+  const setSelectedRepoId = useAppStore(
     (state) => state.setSelectedRepoId,
   );
-  const navigate = useNavigate();
+  const setShowDiscoveryModal = useAppStore(
+    (state) => state.setShowDiscoveryModal,
+  );
 
-  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [showAddIssueModal, setShowAddIssueModal] = useState(false);
 
   // Sync active project selection in the left sidebar layout
   useEffect(() => {
@@ -42,14 +43,14 @@ function ProjectDetailsRoute() {
         activeRepoDetails={activeRepoDetails}
         loadingDetails={loadingDetails}
         detailsError={detailsError}
-        onAddTaskClick={() => setShowAddTaskModal(true)}
-        onImportClick={() => navigate({ to: "/dashboard/discovery" })}
+        onAddIssueClick={() => setShowAddIssueModal(true)}
+        onImportClick={() => setShowDiscoveryModal(true)}
       />
 
-      {showAddTaskModal && projectId && (
-        <AddTaskModal
+      {showAddIssueModal && projectId && (
+        <AddIssueModal
           repoId={projectId}
-          onClose={() => setShowAddTaskModal(false)}
+          onClose={() => setShowAddIssueModal(false)}
         />
       )}
     </>

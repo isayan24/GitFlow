@@ -77,20 +77,6 @@ export const importRepository = async (
       });
     }
 
-    // Create repository record in DB
-    const repository = await prisma.repository.create({
-      data: {
-        githubRepoId: Number(githubRepoId),
-        name,
-        owner,
-        description,
-        url,
-        isPrivate: Boolean(isPrivate),
-        imageUrl,
-        importedById: dbUserId,
-      },
-    });
-
     // Fetch GitHub Token from Clerk connection
     const tokenResponse = await clerkClient.users.getUserOauthAccessToken(
       clerkId!,
@@ -105,6 +91,36 @@ export const importRepository = async (
           "GitHub OAuth token not found. Please log in with GitHub to perform syncs.",
       });
     }
+
+    // Detect Tech Stack to set as Image URL
+    let finalImageUrl = imageUrl; // Fallback to owner avatar
+    try {
+      const detectedStack = await githubService.detectTechStack(
+        githubToken,
+        owner,
+        name,
+      );
+      if (detectedStack) {
+        finalImageUrl = detectedStack;
+      }
+    } catch (err) {
+      console.error("⚠️ Tech stack detection error:", err);
+    }
+
+    // Create repository record in DB
+    const repository = await prisma.repository.create({
+      data: {
+        githubRepoId: Number(githubRepoId),
+        name,
+        owner,
+        description,
+        url,
+        isPrivate: Boolean(isPrivate),
+        imageUrl: finalImageUrl,
+        importedById: dbUserId,
+      },
+    });
+
 
     // 1. Fetch & import issues and PRs (Max 100)
     try {

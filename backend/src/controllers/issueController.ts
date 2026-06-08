@@ -74,7 +74,9 @@ export const createIssue = async (
         console.error("⚠️ Failed to create issue on GitHub:", err);
         return res.status(err.response?.status || 500).json({
           status: "ERROR",
-          message: err.response?.data?.message || "Failed to create issue on GitHub. Please verify repository access permissions.",
+          message:
+            err.response?.data?.message ||
+            "Failed to create issue on GitHub. Please verify repository access permissions.",
         });
       }
 
@@ -168,7 +170,9 @@ export const updateIssueStatus = async (
           console.error("⚠️ Failed to update issue state on GitHub:", err);
           return res.status(err.response?.status || 500).json({
             status: "ERROR",
-            message: err.response?.data?.message || "Failed to update issue status on GitHub. Please verify your repository access rights.",
+            message:
+              err.response?.data?.message ||
+              "Failed to update issue status on GitHub. Please verify your repository access rights.",
           });
         }
       }
@@ -236,7 +240,6 @@ export const createChecklistItem = async (
 
     return res.status(201).json({
       status: "SUCCESS",
-      subIssue: checklist, // Keep property name as subIssue or checklist? Let's return both or update the frontend accordingly. Let's return both to be safe or change to checklist. Let's return checklist and we'll update frontend to read checklist.
       checklist,
     });
   } catch (error) {
