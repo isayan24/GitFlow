@@ -332,4 +332,51 @@ export const githubService = {
     }
     return null;
   },
+
+  /**
+   * Fetches commits for a specific repository within a date range
+   */
+  async fetchRepoCommits(
+    token: string,
+    owner: string,
+    repo: string,
+    since: string,
+    until: string,
+  ): Promise<any[]> {
+    const response = await axios.get<any[]>(
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/commits`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+        params: {
+          since,
+          until,
+          per_page: 100,
+        },
+      },
+    );
+    return response.data;
+  },
+
+  /**
+   * Fetches languages used in a specific repository
+   */
+  async fetchRepoLanguages(
+    token: string,
+    owner: string,
+    repo: string,
+  ): Promise<Record<string, number>> {
+    const response = await axios.get<Record<string, number>>(
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/languages`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+      },
+    );
+    return response.data;
+  },
 };

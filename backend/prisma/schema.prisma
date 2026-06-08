@@ -46,6 +46,7 @@ model Repository {
   url            String
   isPrivate      Boolean                @default(false)
   imageUrl       String?                // Custom project banner/icon URL
+  languages      Json?
   importedById   String
   importedBy     User                   @relation(fields: [importedById], references: [id], onDelete: Cascade)
   createdAt      DateTime               @default(now())

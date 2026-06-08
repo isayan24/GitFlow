@@ -142,8 +142,11 @@ export function ProjectDashboard({
         </div>
       </div>
 
-      {/* Commit Calendar Heatmap */}
-      <CommitHeatmap commitActivity={activeRepoDetails.commitActivity} />
+      {/* Commit Calendar Heatmap with Side-by-Side Languages */}
+      <CommitHeatmap
+        commitActivity={activeRepoDetails.commitActivity}
+        languages={activeRepoDetails.languages}
+      />
 
       {/* Issues Board */}
       <IssuesBoard 

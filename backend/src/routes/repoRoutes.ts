@@ -4,7 +4,8 @@ import {
   importRepository, 
   listImportedRepos, 
   getRepositoryDetails, 
-  syncRepository
+  syncRepository,
+  getRepoCommits
 } from '../controllers/repoController.js';
 import {
   createIssue,
@@ -27,6 +28,9 @@ router.get('/:id', requireAuth, requireDbUser, getRepositoryDetails);
 
 // POST /api/repositories/:id/sync
 router.post('/:id/sync', requireAuth, requireDbUser, syncRepository);
+
+// GET /api/repositories/:id/commits
+router.get('/:id/commits', requireAuth, requireDbUser, getRepoCommits);
 
 // POST /api/repositories/:repositoryId/issues (Create issue)
 router.post('/:repositoryId/issues', requireAuth, requireDbUser, createIssue);

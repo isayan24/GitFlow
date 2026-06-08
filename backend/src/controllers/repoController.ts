@@ -107,6 +107,18 @@ export const importRepository = async (
       console.error("⚠️ Tech stack detection error:", err);
     }
 
+    // Fetch repository languages from GitHub
+    let languages = {};
+    try {
+      languages = await githubService.fetchRepoLanguages(
+        githubToken,
+        owner,
+        name,
+      );
+    } catch (err) {
+      console.error("⚠️ Failed to fetch repository languages:", err);
+    }
+
     // Create repository record in DB
     const repository = await prisma.repository.create({
       data: {
@@ -118,6 +130,7 @@ export const importRepository = async (
         isPrivate: Boolean(isPrivate),
         imageUrl: finalImageUrl,
         importedById: dbUserId,
+        languages: languages,
       },
     });
 
@@ -408,6 +421,37 @@ export const syncRepository = async (
       console.error("⚠️ Failed to sync GitHub commit activity:", err);
     }
 
+    // 6. Sync repository metadata & languages
+    try {
+      console.log(
+        `🔄 Syncing metadata & languages from GitHub for ${repository.owner}/${repository.name}...`,
+      );
+      const languages = await githubService.fetchRepoLanguages(
+        githubToken,
+        repository.owner,
+        repository.name,
+      );
+      
+      const metadata = await githubService.fetchRepoMetadata(
+        githubToken,
+        repository.owner,
+        repository.name,
+      );
+
+      await prisma.repository.update({
+        where: { id: repository.id },
+        data: {
+          description: metadata.description,
+          isPrivate: Boolean(metadata.private),
+          url: metadata.html_url,
+          languages: languages,
+        },
+      });
+      console.log(`✅ Synced repository metadata & languages.`);
+    } catch (err) {
+      console.error("⚠️ Failed to sync repository metadata & languages:", err);
+    }
+
     // Return the updated repository details
     const updatedRepository = await prisma.repository.findUnique({
       where: { id: repository.id },
@@ -436,6 +480,97 @@ export const syncRepository = async (
     });
   } catch (error) {
     console.error("Error syncing repository:", error);
+    next(error);
+  }
+};
+
+/**
+ * Fetches commits for a specific repository on a given date (YYYY-MM-DD format)
+ */
+export const getRepoCommits = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const { date } = req.query;
+    const dbUserId = req.auth?.dbUser?.id;
+    const clerkId = req.auth?.userId;
+
+    if (!date) {
+      return res.status(400).json({
+        status: "BAD_REQUEST",
+        message: "Missing required query parameter: date is required (format: YYYY-MM-DD).",
+      });
+    }
+
+    // 1. Fetch repository from DB to verify user owns/imported it
+    const repository = await prisma.repository.findFirst({
+      where: {
+        id,
+        importedById: dbUserId,
+      },
+    });
+
+    if (!repository) {
+      return res.status(404).json({
+        status: "NOT_FOUND",
+        message: "Repository not found or access denied.",
+      });
+    }
+
+    // 2. Fetch GitHub Token from Clerk connection
+    const tokenResponse = await clerkClient.users.getUserOauthAccessToken(
+      clerkId!,
+      "github",
+    );
+    const githubToken = tokenResponse.data[0]?.token;
+
+    if (!githubToken) {
+      return res.status(400).json({
+        status: "ERROR",
+        message: "GitHub OAuth token not found. Please reconnect your GitHub account.",
+      });
+    }
+
+    // 3. Compute date range (since/until in UTC ISO format)
+    const targetDate = new Date(date as string);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        status: "BAD_REQUEST",
+        message: "Invalid date format. Please use YYYY-MM-DD.",
+      });
+    }
+
+    const since = `${date}T00:00:00Z`;
+    const until = `${date}T23:59:59Z`;
+
+    // 4. Query GitHub API
+    const rawCommits = await githubService.fetchRepoCommits(
+      githubToken,
+      repository.owner,
+      repository.name,
+      since,
+      until,
+    );
+
+    // 5. Map fields
+    const mappedCommits = rawCommits.map((item: any) => ({
+      sha: item.sha,
+      message: item.commit.message,
+      author: item.commit.author.name || item.author?.login || "Unknown",
+      authorAvatarUrl: item.author?.avatar_url || null,
+      date: item.commit.author.date,
+      url: item.html_url,
+    }));
+
+    return res.status(200).json({
+      status: "SUCCESS",
+      commits: mappedCommits,
+    });
+  } catch (error) {
+    console.error("Error fetching repository commits:", error);
     next(error);
   }
 };
