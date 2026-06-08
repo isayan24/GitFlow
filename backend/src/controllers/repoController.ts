@@ -3,7 +3,7 @@ import { AuthenticatedRequest } from "../middleware/auth.js";
 import { prisma } from "../config/db.js";
 import { clerkClient } from "@clerk/express";
 import { githubService } from "../services/githubService.js";
-import { TaskStatus, TaskType } from "@prisma/client";
+import { IssueStatus, ChecklistStatus, TaskType } from "@prisma/client";
 
 /**
  * Lists all projects (repositories) imported by the authenticated user
@@ -21,8 +21,8 @@ export const listImportedRepos = async (
       include: {
         _count: {
           select: {
-            tasks: true,
-            assignments: true,
+            checklists: true,
+            issues: true,
           },
         },
         commitActivity: {
@@ -56,8 +56,6 @@ export const importRepository = async (
     const dbUserId = req.auth?.dbUser?.id;
     const clerkId = req.auth?.userId;
 
-    console.log(req.body, "*** importing repo ***");
-
     if (!githubRepoId || !name || !owner || !url) {
       return res.status(400).json({
         status: "BAD_REQUEST",
@@ -80,9 +78,6 @@ export const importRepository = async (
     }
 
     // Create repository record in DB
-    console.log(
-      `📦 Registering repository record in PostgreSQL: ${owner}/${name}`,
-    );
     const repository = await prisma.repository.create({
       data: {
         githubRepoId: Number(githubRepoId),
@@ -97,9 +92,6 @@ export const importRepository = async (
     });
 
     // Fetch GitHub Token from Clerk connection
-    console.log(
-      `🔑 Fetching GitHub token from Clerk to sync: ${owner}/${name}`,
-    );
     const tokenResponse = await clerkClient.users.getUserOauthAccessToken(
       clerkId!,
       "github",
@@ -116,26 +108,25 @@ export const importRepository = async (
 
     // 1. Fetch & import issues and PRs (Max 100)
     try {
-      console.log(`🐙 Fetching issues/PRs from GitHub for ${owner}/${name}...`);
       const githubIssues = await githubService.fetchRepoIssues(
         githubToken,
         owner,
         name,
       );
-      const mappedTasks = githubIssues.map((issue) => ({
+      const mappedIssues = githubIssues.map((issue) => ({
         title: issue.title,
         description: issue.body,
         status:
-          issue.state === "closed" ? TaskStatus.COMPLETED : TaskStatus.TODO,
+          issue.state === "closed" ? IssueStatus.CLOSED : IssueStatus.OPEN,
         type: issue.pull_request ? TaskType.GITHUB_PR : TaskType.GITHUB_ISSUE,
         githubNumber: issue.number,
         githubUrl: issue.html_url,
         repositoryId: repository.id,
       }));
 
-      if (mappedTasks.length > 0) {
-        await prisma.task.createMany({ data: mappedTasks });
-        console.log(`✅ Imported ${mappedTasks.length} GitHub tasks.`);
+      if (mappedIssues.length > 0) {
+        await prisma.issue.createMany({ data: mappedIssues });
+        console.log(`✅ Imported ${mappedIssues.length} GitHub issues.`);
       }
     } catch (err) {
       console.error("⚠️ Failed to import GitHub issues:", err);
@@ -143,9 +134,6 @@ export const importRepository = async (
 
     // 2. Fetch & import commit activity
     try {
-      console.log(
-        `🐙 Fetching commit activity statistics from GitHub for ${owner}/${name}...`,
-      );
       const githubCommits = await githubService.fetchRepoCommitActivity(
         githubToken,
         owner,
@@ -197,12 +185,12 @@ export const getRepositoryDetails = async (
         importedById: dbUserId,
       },
       include: {
-        tasks: {
+        checklists: {
           orderBy: { createdAt: "desc" },
         },
-        assignments: {
+        issues: {
           include: {
-            tasks: true,
+            checklists: true,
           },
           orderBy: { createdAt: "desc" },
         },
@@ -225,109 +213,6 @@ export const getRepositoryDetails = async (
     });
   } catch (error) {
     console.error("Error getting repository details:", error);
-    next(error);
-  }
-};
-
-/**
- * Updates the status of a specific task
- */
-export const updateTaskStatus = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { taskId } = req.params;
-    const { status } = req.body;
-    const dbUserId = req.auth?.dbUser?.id;
-
-    if (!status || !Object.values(TaskStatus).includes(status)) {
-      return res.status(400).json({
-        status: "BAD_REQUEST",
-        message: `Invalid or missing status. Must be one of: ${Object.values(TaskStatus).join(", ")}`,
-      });
-    }
-
-    // Verify task ownership through repository import association
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: { repository: true },
-    });
-
-    if (!task || task.repository.importedById !== dbUserId) {
-      return res.status(404).json({
-        status: "NOT_FOUND",
-        message: "Task not found or access denied.",
-      });
-    }
-
-    const updatedTask = await prisma.task.update({
-      where: { id: taskId },
-      data: { status: status as TaskStatus },
-    });
-
-    return res.status(200).json({
-      status: "SUCCESS",
-      task: updatedTask,
-    });
-  } catch (error) {
-    console.error("Error updating task status:", error);
-    next(error);
-  }
-};
-
-/**
- * Creates a manual task inside a repository
- */
-export const createTask = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { id } = req.params; // Repository internal ID
-    const { title, description, status } = req.body;
-    const dbUserId = req.auth?.dbUser?.id;
-
-    if (!title) {
-      return res.status(400).json({
-        status: "BAD_REQUEST",
-        message: "Task title is required.",
-      });
-    }
-
-    // Verify repository ownership
-    const repo = await prisma.repository.findFirst({
-      where: {
-        id,
-        importedById: dbUserId,
-      },
-    });
-
-    if (!repo) {
-      return res.status(404).json({
-        status: "NOT_FOUND",
-        message: "Repository not found or access denied.",
-      });
-    }
-
-    const task = await prisma.task.create({
-      data: {
-        title,
-        description,
-        status: (status as TaskStatus) || TaskStatus.TODO,
-        type: TaskType.MANUAL,
-        repositoryId: id,
-      },
-    });
-
-    return res.status(201).json({
-      status: "SUCCESS",
-      task,
-    });
-  } catch (error) {
-    console.error("Error creating manual task:", error);
     next(error);
   }
 };
@@ -402,7 +287,7 @@ export const syncRepository = async (
       throw error;
     }
 
-    // 4. Sync issues/PRs
+    // 4. Sync issues/PRs into Issues
     try {
       console.log(
         `🔄 Syncing issues/PRs from GitHub for ${repository.owner}/${repository.name}...`,
@@ -413,60 +298,60 @@ export const syncRepository = async (
         repository.name,
       );
 
-      const existingTasks = await prisma.task.findMany({
+      const existingIssues = await prisma.issue.findMany({
         where: {
           repositoryId: repository.id,
           githubNumber: { not: null },
         },
       });
 
-      const taskMap = new Map(existingTasks.map((t) => [t.githubNumber, t]));
+      const issueMap = new Map(existingIssues.map((i) => [i.githubNumber, i]));
 
-      for (const issue of githubIssues) {
-        const existingTask = taskMap.get(issue.number);
+      for (const githubIssue of githubIssues) {
+        const existingIssue = issueMap.get(githubIssue.number);
 
-        if (existingTask) {
-          // Update existing task
+        if (existingIssue) {
+          // Update existing issue
           const newStatus =
-            issue.state === "closed"
-              ? TaskStatus.COMPLETED
-              : existingTask.status === TaskStatus.COMPLETED
-                ? TaskStatus.TODO
-                : existingTask.status;
+            githubIssue.state === "closed"
+              ? IssueStatus.CLOSED
+              : existingIssue.status === IssueStatus.CLOSED
+                ? IssueStatus.OPEN
+                : existingIssue.status;
 
-          await prisma.task.update({
-            where: { id: existingTask.id },
+          await prisma.issue.update({
+            where: { id: existingIssue.id },
             data: {
-              title: issue.title,
-              description: issue.body,
+              title: githubIssue.title,
+              description: githubIssue.body,
               status: newStatus,
-              type: issue.pull_request
+              type: githubIssue.pull_request
                 ? TaskType.GITHUB_PR
                 : TaskType.GITHUB_ISSUE,
-              githubUrl: issue.html_url,
+              githubUrl: githubIssue.html_url,
             },
           });
         } else {
-          // Create new task
-          await prisma.task.create({
+          // Create new issue
+          await prisma.issue.create({
             data: {
-              title: issue.title,
-              description: issue.body,
+              title: githubIssue.title,
+              description: githubIssue.body,
               status:
-                issue.state === "closed"
-                  ? TaskStatus.COMPLETED
-                  : TaskStatus.TODO,
-              type: issue.pull_request
+                githubIssue.state === "closed"
+                  ? IssueStatus.CLOSED
+                  : IssueStatus.OPEN,
+              type: githubIssue.pull_request
                 ? TaskType.GITHUB_PR
                 : TaskType.GITHUB_ISSUE,
-              githubNumber: issue.number,
-              githubUrl: issue.html_url,
+              githubNumber: githubIssue.number,
+              githubUrl: githubIssue.html_url,
               repositoryId: repository.id,
             },
           });
         }
       }
-      console.log(`✅ Synced ${githubIssues.length} issues/PRs.`);
+      console.log(`✅ Synced ${githubIssues.length} issues/PRs to Issues.`);
     } catch (err) {
       console.error("⚠️ Failed to sync GitHub issues:", err);
     }
@@ -511,12 +396,12 @@ export const syncRepository = async (
     const updatedRepository = await prisma.repository.findUnique({
       where: { id: repository.id },
       include: {
-        tasks: {
+        checklists: {
           orderBy: { createdAt: "desc" },
         },
-        assignments: {
+        issues: {
           include: {
-            tasks: true,
+            checklists: true,
           },
           orderBy: { createdAt: "desc" },
         },

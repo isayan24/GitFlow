@@ -21,7 +21,6 @@ export const syncUser = async (
       });
     }
 
-    console.log(`🔄 Querying Clerk API for profile of user: ${clerkId}`);
     const clerkUser = await clerkClient.users.getUser(clerkId);
 
     const email = clerkUser.emailAddresses[0]?.emailAddress || null;

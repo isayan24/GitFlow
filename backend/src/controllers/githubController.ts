@@ -23,9 +23,6 @@ export const listUserRepos = async (
     }
 
     // Fetch GitHub Access Token from Clerk
-    console.log(
-      `🔑 Fetching GitHub OAuth token from Clerk for user: ${clerkId}`,
-    );
     const tokenResponse = await clerkClient.users.getUserOauthAccessToken(
       clerkId,
       "github",
@@ -41,7 +38,6 @@ export const listUserRepos = async (
     }
 
     // Query GitHub API
-    console.log("🐙 Requesting repository list from GitHub API...");
     const repos = await githubService.fetchUserRepos(githubToken);
 
     const mappedRepos = repos.map((repo) => ({

@@ -1,6 +1,6 @@
-import axios from 'axios';
+import axios from "axios";
 
-const GITHUB_API_URL = 'https://api.github.com';
+const GITHUB_API_URL = "https://api.github.com";
 
 export interface GitHubRepoResponse {
   id: number;
@@ -19,7 +19,7 @@ export interface GitHubIssueResponse {
   number: number;
   title: string;
   body: string | null;
-  state: 'open' | 'closed';
+  state: "open" | "closed";
   html_url: string;
   pull_request?: object;
   created_at: string;
@@ -40,16 +40,19 @@ export const githubService = {
    * Fetches the repositories belonging to the authenticated GitHub user
    */
   async fetchUserRepos(token: string): Promise<GitHubRepoResponse[]> {
-    const response = await axios.get<GitHubRepoResponse[]>(`${GITHUB_API_URL}/user/repos`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
+    const response = await axios.get<GitHubRepoResponse[]>(
+      `${GITHUB_API_URL}/user/repos`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+        params: {
+          sort: "updated",
+          per_page: 100,
+        },
       },
-      params: {
-        sort: 'updated',
-        per_page: 100,
-      },
-    });
+    );
     return response.data;
   },
 
@@ -59,20 +62,20 @@ export const githubService = {
   async fetchRepoIssues(
     token: string,
     owner: string,
-    repo: string
+    repo: string,
   ): Promise<GitHubIssueResponse[]> {
     const response = await axios.get<GitHubIssueResponse[]>(
       `${GITHUB_API_URL}/repos/${owner}/${repo}/issues`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
+          Accept: "application/vnd.github+json",
         },
         params: {
-          state: 'all',
+          state: "all",
           per_page: 100,
         },
-      }
+      },
     );
     return response.data;
   },
@@ -83,21 +86,20 @@ export const githubService = {
   async fetchRepoCommitActivity(
     token: string,
     owner: string,
-    repo: string
+    repo: string,
   ): Promise<GitHubCommitActivityResponse[]> {
     const maxRetries = 5;
     const delayMs = 2000;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`🐙 Fetching commit activity for ${owner}/${repo} (attempt ${attempt}/${maxRetries})...`);
       const response = await axios.get<GitHubCommitActivityResponse[]>(
         `${GITHUB_API_URL}/repos/${owner}/${repo}/stats/commit_activity`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            Accept: 'application/vnd.github+json',
+            Accept: "application/vnd.github+json",
           },
-        }
+        },
       );
 
       if (response.status === 200) {
@@ -106,14 +108,18 @@ export const githubService = {
       }
 
       if (response.status === 202) {
-        console.warn(`⚠️ GitHub statistics for ${owner}/${repo} are currently calculating (status 202). Waiting ${delayMs}ms before retry...`);
+        console.warn(
+          `⚠️ GitHub statistics for ${owner}/${repo} are currently calculating (status 202). Waiting ${delayMs}ms before retry...`,
+        );
         if (attempt < maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
       }
     }
 
-    console.warn(`❌ Failed to retrieve calculated commit activity statistics for ${owner}/${repo} after ${maxRetries} retries.`);
+    console.warn(
+      `❌ Failed to retrieve calculated commit activity statistics for ${owner}/${repo} after ${maxRetries} retries.`,
+    );
     return [];
   },
 
@@ -123,16 +129,62 @@ export const githubService = {
   async fetchRepoMetadata(
     token: string,
     owner: string,
-    repo: string
+    repo: string,
   ): Promise<GitHubRepoResponse> {
     const response = await axios.get<GitHubRepoResponse>(
       `${GITHUB_API_URL}/repos/${owner}/${repo}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
+          Accept: "application/vnd.github+json",
         },
-      }
+      },
+    );
+    return response.data;
+  },
+
+  /**
+   * Creates an issue in a GitHub repository
+   */
+  async createIssue(
+    token: string,
+    owner: string,
+    repo: string,
+    title: string,
+    body: string | null,
+  ): Promise<GitHubIssueResponse> {
+    const response = await axios.post<GitHubIssueResponse>(
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/issues`,
+      { title, body },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+      },
+    );
+    return response.data;
+  },
+
+  /**
+   * Updates an issue's state (open/closed) in a GitHub repository
+   */
+  async updateIssueState(
+    token: string,
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    state: "open" | "closed",
+  ): Promise<GitHubIssueResponse> {
+    const response = await axios.patch<GitHubIssueResponse>(
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/issues/${issueNumber}`,
+      { state },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+      },
     );
     return response.data;
   },

@@ -7,10 +7,14 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  COMPLETED
+enum IssueStatus {
+  OPEN
+  CLOSED
+}
+
+enum ChecklistStatus {
+  PENDING
+  DONE
 }
 
 enum TaskType {
@@ -29,8 +33,8 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   repositories   Repository[]
-  assignedTasks  Task[]       @relation("AssignedTasks")
-  createdTasks   Task[]       @relation("CreatedTasks")
+  assignedChecklists Checklist[] @relation("AssignedChecklists")
+  createdChecklists  Checklist[] @relation("CreatedChecklists")
 }
 
 model Repository {
@@ -46,48 +50,53 @@ model Repository {
   importedBy     User                   @relation(fields: [importedById], references: [id], onDelete: Cascade)
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
-  tasks          Task[]
-  assignments    Assignment[]
+  issues         Issue[]
+  checklists     Checklist[]
   commitActivity WeeklyCommitActivity[]
 
   @@index([importedById])
 }
 
-model Assignment {
-  id           String     @id @default(uuid())
-  title        String
-  description  String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  repositoryId String
-  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  tasks        Task[]
-
-  @@index([repositoryId])
-}
-
-model Task {
+model Issue {
   id           String      @id @default(uuid())
   title        String
   description  String?
-  status       TaskStatus  @default(TODO)
+  status       IssueStatus @default(OPEN)
   type         TaskType    @default(MANUAL)
   githubNumber Int?        // GitHub Issue/PR number (if synced)
   githubUrl    String?     // Link to GitHub page (if synced)
-  images       String[]    @default([]) // Task uploaded screenshot/image URLs
-  repositoryId String
-  repository   Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  assignmentId String?
-  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  assigneeId   String?
-  assignee     User?       @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  creatorId    String?
-  creator      User?       @relation("CreatedTasks", fields: [creatorId], references: [id])
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  repositoryId String
+  repository   Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  checklists   Checklist[]
+
+  @@unique([repositoryId, githubNumber])
+  @@index([repositoryId])
+}
+
+model Checklist {
+  id           String          @id @default(uuid())
+  title        String
+  description  String?
+  status       ChecklistStatus @default(PENDING)
+  type         TaskType        @default(MANUAL)
+  githubNumber Int?            // GitHub Issue/PR number (if synced)
+  githubUrl    String?         // Link to GitHub page (if synced)
+  imageUrl     String?         // Image URL associated with checklist item
+  repositoryId String
+  repository   Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  issueId      String?
+  issue        Issue?          @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  assigneeId   String?
+  assignee     User?           @relation("AssignedChecklists", fields: [assigneeId], references: [id])
+  creatorId    String?
+  creator      User?           @relation("CreatedChecklists", fields: [creatorId], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   @@index([repositoryId])
-  @@index([assignmentId])
+  @@index([issueId])
   @@index([assigneeId])
 }
 
