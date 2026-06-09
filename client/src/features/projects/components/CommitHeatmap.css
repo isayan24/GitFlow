@@ -1,0 +1,37 @@
+/*
+ * CalHeatmap Dark Theme Overrides
+ * Scoped to .cal-heatmap-dark so these never bleed into the rest of the app.
+ * CalHeatmap injects SVG/HTML elements dynamically; we must target them here.
+ */
+
+/* ── Month label text (the "Nov", "Dec" … "Jun" headings) ── */
+.cal-heatmap-dark .ch-domain-text {
+  fill: #a1a1aa !important;   /* zinc-400 — matches muted-foreground */
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+}
+
+/* ── Sub-domain (day cell) text, when visible ── */
+.cal-heatmap-dark .ch-subdomain-text {
+  fill: #71717a !important;   /* zinc-500 */
+  font-size: 8px !important;
+}
+
+/* ── Tooltip bubble ── */
+.ch-tooltip {
+  background-color: rgba(9, 9, 11, 0.95) !important;
+  border: 1px solid rgba(63, 63, 70, 0.5) !important;
+  border-radius: 8px !important;
+  color: #f4f4f5 !important;
+  font-size: 11px !important;
+  padding: 5px 10px !important;
+  font-family: inherit !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ── Remove any CalHeatmap white background on the SVG root ── */
+.cal-heatmap-dark .ch-plugin-calendar-label svg,
+.cal-heatmap-dark svg {
+  background: transparent !important;
+}

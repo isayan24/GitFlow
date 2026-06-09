@@ -134,7 +134,6 @@ export const importRepository = async (
       },
     });
 
-
     // 1. Fetch & import issues and PRs (Max 100)
     try {
       const githubIssues = await githubService.fetchRepoIssues(
@@ -431,7 +430,7 @@ export const syncRepository = async (
         repository.owner,
         repository.name,
       );
-      
+
       const metadata = await githubService.fetchRepoMetadata(
         githubToken,
         repository.owner,
@@ -471,8 +470,6 @@ export const syncRepository = async (
       },
     });
 
-    console.log(updatedRepository, "updatedRepository");
-
     return res.status(200).json({
       status: "SUCCESS",
       message: "Repository sync completed successfully.",
@@ -501,7 +498,8 @@ export const getRepoCommits = async (
     if (!date) {
       return res.status(400).json({
         status: "BAD_REQUEST",
-        message: "Missing required query parameter: date is required (format: YYYY-MM-DD).",
+        message:
+          "Missing required query parameter: date is required (format: YYYY-MM-DD).",
       });
     }
 
@@ -530,7 +528,8 @@ export const getRepoCommits = async (
     if (!githubToken) {
       return res.status(400).json({
         status: "ERROR",
-        message: "GitHub OAuth token not found. Please reconnect your GitHub account.",
+        message:
+          "GitHub OAuth token not found. Please reconnect your GitHub account.",
       });
     }
 

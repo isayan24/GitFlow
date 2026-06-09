@@ -379,4 +379,28 @@ export const githubService = {
     );
     return response.data;
   },
+
+  /**
+   * Fetches the most recent commits for a repository
+   */
+  async fetchRecentCommits(
+    token: string,
+    owner: string,
+    repo: string,
+    perPage: number = 30,
+  ): Promise<any[]> {
+    const response = await axios.get<any[]>(
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/commits`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+        params: {
+          per_page: perPage,
+        },
+      },
+    );
+    return response.data;
+  },
 };

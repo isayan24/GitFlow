@@ -27,7 +27,6 @@ export function SidebarLeft({
   const currentPath = location.pathname
 
   const { data: importedRepos = [] } = useImportedProjects()
-  const selectedRepoId = useAppStore((state) => state.selectedRepoId)
   const setSelectedRepoId = useAppStore((state) => state.setSelectedRepoId)
   const setShowDiscoveryModal = useAppStore((state) => state.setShowDiscoveryModal)
 
@@ -63,14 +62,8 @@ export function SidebarLeft({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton 
-                isActive={currentPath === `/dashboard/projects/${selectedRepoId}`} 
-                render={
-                  selectedRepoId ? (
-                    <Link to="/dashboard/projects/$projectId" params={{ projectId: selectedRepoId }} />
-                  ) : (
-                    <Link to="/dashboard/projects" />
-                  )
-                }
+                isActive={currentPath === '/dashboard' || currentPath === '/dashboard/'} 
+                render={<Link to="/dashboard" />}
                 className="w-full text-sidebar-foreground/75 hover:text-sidebar-foreground"
               >
                 <LayoutDashboard size={16} />
