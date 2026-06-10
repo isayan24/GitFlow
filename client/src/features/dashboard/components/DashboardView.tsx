@@ -14,8 +14,6 @@ import { DashboardLeaderboard } from "./DashboardLeaderboard";
 export function DashboardView() {
   const { data: stats, isLoading, error } = useDashboardStats();
 
-  console.log(stats);
-
   /* ── Loading ── */
   if (isLoading) {
     return (

@@ -381,13 +381,21 @@ export const githubService = {
   },
 
   /**
-   * Fetches the most recent commits for a repository
+   * Fetches all commits for a repository authored on or after `since` (ISO 8601 UTC).
+   *
+   * This is the correct method for streak and analytics calculations because it
+   * uses a calendar-based window (e.g., last 90 days) rather than an arbitrary
+   * commit count cap that causes the streak underreporting bug.
+   *
+   * @param since  - ISO 8601 UTC date string, e.g. "2026-03-10T00:00:00Z"
+   * @param perPage - Max commits per page (GitHub cap: 100)
    */
-  async fetchRecentCommits(
+  async fetchCommitsSince(
     token: string,
     owner: string,
     repo: string,
-    perPage: number = 30,
+    since: string,
+    perPage: number = 100,
   ): Promise<any[]> {
     const response = await axios.get<any[]>(
       `${GITHUB_API_URL}/repos/${owner}/${repo}/commits`,
@@ -397,6 +405,7 @@ export const githubService = {
           Accept: "application/vnd.github+json",
         },
         params: {
+          since,
           per_page: perPage,
         },
       },
