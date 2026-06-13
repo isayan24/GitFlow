@@ -11,7 +11,11 @@ export function useRepoCommits(repoId: string | null, dateStr: string | null, en
     queryFn: async () => {
       if (!repoId || !dateStr) return [];
       const token = await getToken();
-      const response = await axios.get(`${API_URL}/api/repositories/${repoId}/commits`, {
+      const url = repoId === "all"
+        ? `${API_URL}/api/dashboard/commits`
+        : `${API_URL}/api/repositories/${repoId}/commits`;
+
+      const response = await axios.get(url, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

@@ -1,4 +1,4 @@
-# 🚀 GitFlow
+# 🚀 GitFlow (DevPulse)
 
 **GitFlow** is a modern, automation-first developer tracking platform and project management SaaS. It bridges the gap between active code creation and manual project boards by converting GitHub activity (commits, pull requests, issues) directly into live, actionable dashboard metrics—completely eliminating the need for manual Jira or Trello ticket updates.
 
@@ -21,32 +21,37 @@ Project management shouldn't feel like a tax on code creation. Developers hate "
 1.  **Frictionless Single-Button Onboarding**
     - Auth directly with your GitHub credentials via Clerk.
     - Search and filter public and private repositories in real-time, importing them with one click.
-2.  **The Hybrid Kanban Board**
-    - Automatically maps GitHub Issues and PRs as project board cards.
-    - Supports manual task creation for non-code objectives.
-    - Unified task tracking states (`To Do`, `In Progress`, `Completed`).
-3.  **Flexible Assignments**
-    - Group multiple tasks together into named "Assignments" (e.g., _"Sprint 1 Frontend Rebuild"_, _"Database Migration & Security"_).
+
+2.  **Automated Issues & PR Board**
+    - Automatically maps GitHub Issues and PRs as task items.
+    - Supports creating **manual/local task cards** for non-code objectives (e.g., design, copywriting, DevOps).
+    - Filter task items instantly by status (`All`, `Open`, `Closed`) or search via query keywords.
+
+3.  **Interactive Sub-task Steps Checklist**
+    - Break down any issue, PR, or manual task card into smaller, actionable check-list steps.
+    - Toggle steps as `DONE`/`PENDING` and upload or link **screenshot/image URLs** to individual steps for visual reference.
+
 4.  **Per-Project Commit Heatmaps**
-    - Bypasses GitHub's global heatmap limitation by rendering a dedicated 365-day green calendar heatmap for _just_ the opened repository.
+    - Dedicated 10-month (300-day) calendar heatmap showing commit frequency for *just* the opened repository, bypassing GitHub's global profile heatmap limitation.
+    - Language ecosystem breakdown showing exact byte percentages and code color markers.
+
 5.  **Analytics Center**
-    - Code velocity tracking and Pull Request health metrics.
-    - Language ecosystem breakdown showing the primary coding languages in your codebase.
-6.  **Optimistic UI & Real-Time Sync**
-    - UI state updates instantly before the database responds for a desktop-class user experience.
+    - **Semantic Radar Profile**: Greedily classifies developer activity across 6 categories (`Features`, `Fixes`, `Refactoring`, `Testing`, `Documentation`, `Chores`) by parsing commit messages.
+    - **Hourly/Weekly Punch Card**: Visual matrix showing the exact days and hours of high productivity/commits.
+    - **Leaderboard**: Repository rankings by active commit counts in a rolling 30-day window.
+    - **Commit Streak Tracking**: Keeps track of current and longest commit streaks, calculating across all imported repositories, combining cached database history with real-time GitHub commits (UTC-safe, DST-robust).
 
 ---
 
 ## 🛠️ Technology Stack
 
 ### Client (Frontend)
-
 - **Framework:** TanStack Start (full-stack React with type-safe routing)
 - **State Management:** TanStack Query (React Query)
-- **Styling:** Tailwind CSS
+- **Styling:** Vanilla CSS & Tailwind CSS
+- **Visualizations:** Cal-Heatmap, Recharts, Lucide Icons
 
 ### Backend (API & Jobs)
-
 - **Runtime:** Node.js & TypeScript
 - **Server Framework:** Express
 - **Database ORM:** Prisma
@@ -57,16 +62,17 @@ Project management shouldn't feel like a tax on code creation. Developers hate "
 
 ## 🚀 Local Development Setup
 
-To get the backend and local database running, follow these steps:
+To get the client, backend, and local database running, follow these steps:
 
 ### Prerequisites
-
 - Node.js (v18 or higher)
 - Docker & Docker Compose
 
+---
+
 ### 1. Database Setup
 
-Launch the local PostgreSQL database using Docker Compose:
+Launch the local PostgreSQL database using Docker Compose in the `backend/` directory:
 
 ```bash
 cd backend
@@ -75,16 +81,16 @@ docker compose up -d
 
 - This will spin up a PostgreSQL instance on port **`5433`** (customized to avoid conflicts with default system PostgreSQL databases).
 
+---
+
 ### 2. Configure Environment Variables
 
+#### Backend Configuration
 Create a `.env` file in the `backend/` directory:
-
 ```bash
 cp .env.example .env
 ```
-
-Inside `.env`, verify your connection credentials:
-
+Inside `backend/.env`, configure your credentials:
 ```env
 PORT=5000
 DATABASE_URL=postgresql://gitflow_user:gitflow_password@localhost:5433/gitflow_db?schema=public
@@ -94,35 +100,53 @@ CLERK_PUBLISHABLE_KEY=pk_test_placeholder_key
 CLERK_SECRET_KEY=sk_test_placeholder_key
 ```
 
-### 3. Initialize Prisma
-
-Install dependencies and sync the database schema:
-
+#### Client Configuration
+Create a `.env` file in the `client/` directory:
 ```bash
-npm install
-npx prisma db push
+cd ../client
+cp .env.example .env
 ```
-
-### 4. Run the Backend API
-
-Start the TypeScript live-reload dev server:
-
-```bash
-npm run dev
-```
-
-The server will start running on **`http://localhost:5000`**. You can verify connectivity by requesting:
-
-```bash
-curl http://localhost:5000/health
+Inside `client/.env`, configure the API endpoint and Clerk keys:
+```env
+VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+VITE_API_URL=http://localhost:5000
 ```
 
 ---
 
-## 💡 Clerk Offline Dev Mode
+### 3. Initialize Prisma (Backend)
 
-If Clerk keys are not configured in your `.env` file (or left as `placeholder_key` values), the backend will automatically enter **Mock Dev Mode**.
+Go back to the `backend/` directory, install dependencies, and sync the database schema:
 
-- Public routes (like `/health`) will bypass Clerk checks.
-- Protected routes requiring authentication will automatically mock an offline developer profile in the local database (`gitflow_mock_developer`).
-- This allows you to immediately test, write routes, and query data without needing external internet access or creating an online Clerk account.
+```bash
+cd ../backend
+npm install
+npx prisma db push
+```
+
+---
+
+### 4. Run the Application
+
+You need to run both the backend API and the client dev server.
+
+#### Start the Backend API
+```bash
+cd backend
+npm run dev
+```
+The server will start running on **`http://localhost:5000`**. You can verify connectivity by requesting:
+```bash
+curl http://localhost:5000/health
+```
+
+#### Start the Client Dev Server
+In a new terminal window:
+```bash
+cd client
+npm install
+npm run dev
+```
+The web application will start running on **`http://localhost:3000`**.
+
+---

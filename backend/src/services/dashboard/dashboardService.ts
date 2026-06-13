@@ -193,3 +193,73 @@ export async function getDashboardData(
     leaderboard,
   };
 }
+
+/**
+ * Fetches commits across all imported repositories for a user on a given date (YYYY-MM-DD format).
+ */
+export async function getDashboardCommitsForDate(
+  dbUserId: string,
+  clerkId: string,
+  date: string,
+): Promise<any[]> {
+  // 1. Fetch all repositories owned/imported by this user
+  const repositories = await prisma.repository.findMany({
+    where: { importedById: dbUserId },
+    select: {
+      id: true,
+      name: true,
+      owner: true,
+    },
+  });
+
+  if (repositories.length === 0) {
+    return [];
+  }
+
+  // 2. Fetch GitHub OAuth Token
+  const githubToken = await getGitHubToken(clerkId);
+  if (!githubToken) {
+    return [];
+  }
+
+  // 3. Compute date range (since/until in UTC ISO format)
+  const since = `${date}T00:00:00Z`;
+  const until = `${date}T23:59:59Z`;
+
+  // 4. Fetch commits in parallel for each repo
+  const results = await Promise.allSettled(
+    repositories.map(async (repo) => {
+      try {
+        const rawCommits = await githubService.fetchRepoCommits(
+          githubToken,
+          repo.owner,
+          repo.name,
+          since,
+          until,
+        );
+        return rawCommits.map((item: any) => ({
+          sha: item.sha,
+          message: item.commit.message,
+          author: item.commit.author.name || item.author?.login || "Unknown",
+          authorAvatarUrl: item.author?.avatar_url || null,
+          date: item.commit.author.date,
+          url: item.html_url,
+          repoName: repo.name,
+          repoId: repo.id,
+        }));
+      } catch (err) {
+        console.warn(`⚠️ Failed to fetch commits on ${date} for ${repo.owner}/${repo.name}:`, err);
+        return [];
+      }
+    }),
+  );
+
+  // 5. Flatten results and sort by date descending
+  const allCommits = results.flatMap((r) =>
+    r.status === "fulfilled" ? r.value : [],
+  );
+
+  allCommits.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  return allCommits;
+}

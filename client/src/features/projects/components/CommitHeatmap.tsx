@@ -9,6 +9,7 @@ import {
   LANGUAGE_COLORS,
   type CommitHeatmapProps,
 } from "../libs/commitHeatmapUtils";
+import { useAppStore } from "@/store/useAppStore";
 
 const HEATMAP_COLORS = ["#161b22", "#0e4429", "#006d32", "#26a641", "#39d353"];
 const MONTHS_TO_SHOW = 10; // past (N-1) months + current month
@@ -20,6 +21,8 @@ export function CommitHeatmap({
   languages,
 }: CommitHeatmapProps) {
   const calRef = useRef<HTMLDivElement>(null);
+  const setSelectedDateStr = useAppStore((state) => state.setSelectedDateStr);
+  const setShowRightSidebar = useAppStore((state) => state.setShowRightSidebar);
 
   /* ── Language breakdown ── */
   const languagesData = useMemo(() => {
@@ -88,6 +91,16 @@ export function CommitHeatmap({
     }));
 
     const cal = new CalHeatmap();
+    cal.on("click", (_event: any, timestamp: any, _value: any) => {
+      if (!timestamp) return;
+      const dateObj = new Date(Number(timestamp));
+      const yyyy = dateObj.getUTCFullYear();
+      const mm = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(dateObj.getUTCDate()).padStart(2, "0");
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      setSelectedDateStr(dateStr);
+      setShowRightSidebar(true);
+    });
     cal
       .paint(
         {

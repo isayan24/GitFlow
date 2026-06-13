@@ -13,6 +13,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useImportedProjects } from "@/features/projects/api/useImportedProjects";
 import { useProjectDetails } from "@/features/projects/api/useProjectDetails";
 import { useRepoCommits } from "@/features/projects/api/useRepoCommits";
+import { useLocation } from "@tanstack/react-router";
 
 interface SidebarRightProps extends React.ComponentProps<typeof Sidebar> {}
 
@@ -24,33 +25,64 @@ const formatDateStr = (date: Date) => {
 };
 
 export function SidebarRight({ ...props }: SidebarRightProps) {
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const isProjectPage = currentPath.includes("/projects/");
+
   const setShowRightSidebar = useAppStore((state) => state.setShowRightSidebar);
   const globalSelectedRepoId = useAppStore((state) => state.selectedRepoId);
+  const selectedDateStr = useAppStore((state) => state.selectedDateStr);
+  const setSelectedDateStr = useAppStore((state) => state.setSelectedDateStr);
 
   const { data: importedRepos = [] } = useImportedProjects();
-  const [selectedRepoId, setSelectedRepoId] = React.useState<string>("");
-  const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(
-    new Date(),
-  );
+  const [selectedRepoId, setSelectedRepoId] = React.useState<string>("all");
 
-  // Sync with globalSelectedRepoId on load/change
+  // Sync workspace selection based on current page context
   React.useEffect(() => {
-    if (globalSelectedRepoId) {
+    if (isProjectPage && globalSelectedRepoId) {
       setSelectedRepoId(globalSelectedRepoId);
-    } else if (importedRepos.length > 0 && !selectedRepoId) {
-      setSelectedRepoId(importedRepos[0].id);
+    } else if (!isProjectPage) {
+      setSelectedRepoId("all");
     }
-  }, [globalSelectedRepoId, importedRepos]);
+  }, [isProjectPage, globalSelectedRepoId, currentPath]);
+
+  // Convert YYYY-MM-DD string to local Date object for react-day-picker selection
+  const selectedDate = React.useMemo(() => {
+    if (!selectedDateStr) return new Date();
+    const [year, month, day] = selectedDateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }, [selectedDateStr]);
+
+  const handleSelectDate = (date: Date | undefined) => {
+    if (!date) return;
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    setSelectedDateStr(`${yyyy}-${mm}-${dd}`);
+  };
 
   // Fetch selected project details (includes commitActivity)
-  const { data: projectDetails } = useProjectDetails(selectedRepoId || null);
+  const { data: projectDetails } = useProjectDetails(
+    selectedRepoId && selectedRepoId !== "all" ? selectedRepoId : null,
+  );
 
   // Map WeeklyCommitActivity to individual YYYY-MM-DD string key
   const commitMap = React.useMemo(() => {
     const map: Record<string, number> = {};
-    if (!projectDetails?.commitActivity) return map;
 
-    for (const activity of projectDetails.commitActivity) {
+    let activityList: any[] = [];
+    if (selectedRepoId === "all") {
+      // Aggregate across all active repositories
+      importedRepos.forEach((repo: any) => {
+        if (repo.commitActivity) {
+          activityList.push(...repo.commitActivity);
+        }
+      });
+    } else if (projectDetails?.commitActivity) {
+      activityList = projectDetails.commitActivity;
+    }
+
+    for (const activity of activityList) {
       const weekStart = new Date(activity.week * 1000);
       for (let i = 0; i < 7; i++) {
         const dayDate = new Date(weekStart);
@@ -63,7 +95,7 @@ export function SidebarRight({ ...props }: SidebarRightProps) {
       }
     }
     return map;
-  }, [projectDetails]);
+  }, [selectedRepoId, projectDetails, importedRepos]);
 
   // Define calendar modifiers based on commit count (heatmap logic)
   const modifiers = React.useMemo(() => {
@@ -96,11 +128,10 @@ export function SidebarRight({ ...props }: SidebarRightProps) {
   };
 
   // Fetch commits for selected repository and date
-  const dateStr = selectedDate ? formatDateStr(selectedDate) : null;
   const { data: commits = [], isLoading: loadingCommits } = useRepoCommits(
     selectedRepoId || null,
-    dateStr,
-    !!selectedRepoId,
+    selectedDateStr,
+    !!selectedRepoId && !!selectedDateStr,
   );
 
   return (
@@ -134,8 +165,8 @@ export function SidebarRight({ ...props }: SidebarRightProps) {
           onChange={(e) => setSelectedRepoId(e.target.value)}
           className="w-full bg-sidebar-accent border border-sidebar-border rounded-xl px-3 py-2.5 text-xs text-sidebar-foreground focus:outline-none focus:border-primary transition duration-150 cursor-pointer"
         >
-          <option value="" disabled>
-            Select a repository...
+          <option value="all">
+            All Workspaces
           </option>
           {importedRepos.map((repo: any) => (
             <option key={repo.id} value={repo.id}>
@@ -150,7 +181,7 @@ export function SidebarRight({ ...props }: SidebarRightProps) {
         <Calendar
           mode="single"
           selected={selectedDate}
-          onSelect={setSelectedDate}
+          onSelect={handleSelectDate}
           modifiers={modifiers}
           modifiersClassNames={modifiersClassNames}
           className="bg-transparent [--cell-size:2.05rem]"
@@ -171,9 +202,9 @@ export function SidebarRight({ ...props }: SidebarRightProps) {
                 })
               : ""}
           </span>
-          {selectedDate && commitMap[formatDateStr(selectedDate)] > 0 && (
+          {selectedDateStr && commitMap[selectedDateStr] > 0 && (
             <span className="text-3xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
-              {commitMap[formatDateStr(selectedDate)]} commits
+              {commitMap[selectedDateStr]} commits
             </span>
           )}
         </div>
@@ -222,9 +253,16 @@ const CommitCard = ({ commits }: any) => {
           rel="noopener noreferrer"
           className="flex flex-col gap-2 p-3 rounded-xl border border-sidebar-border/70 bg-sidebar-accent/5 hover:border-accent hover:bg-sidebar-accent/20 transition duration-150 group text-left"
         >
-          <span className="text-3xs font-bold text-primary font-mono group-hover:underline">
-            {commit.sha.substring(0, 7)}
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-3xs font-bold text-primary font-mono group-hover:underline">
+              {commit.sha.substring(0, 7)}
+            </span>
+            {commit.repoName && (
+              <span className="text-[9px] px-2 py-0.2 rounded-full border border-sidebar-border text-sidebar-foreground/60 bg-sidebar-accent/10 font-bold shrink-0">
+                {commit.repoName}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-sidebar-foreground font-medium leading-relaxed line-clamp-2">
             {commit.message}
           </p>
